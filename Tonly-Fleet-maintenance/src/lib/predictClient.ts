@@ -15,7 +15,21 @@ export async function runPrediction(body: PredictRequestBody): Promise<PredictRe
     let message = `Prediction engine returned HTTP ${res.status}`;
     try {
       const errBody = await res.json();
-      if (errBody?.error) message = errBody.error;
+      // Our own api/predict.py always sends { error: "a string" }. But if
+      // Vercel's platform intercepts the request before our handler code
+      // even runs (a crashed/timed-out/failed-to-build Python function),
+      // it returns its own error shape instead — typically an object like
+      // { code: "FUNCTION_INVOCATION_FAILED", message: "..." } rather than
+      // a plain string. Handle both so a platform-level failure shows a
+      // real message instead of the value coercing to the literal text
+      // "[object Object]" when passed into `new Error(...)` below.
+      if (typeof errBody?.error === 'string') {
+        message = errBody.error;
+      } else if (errBody?.error?.message) {
+        message = String(errBody.error.message);
+      } else if (errBody?.error) {
+        message = JSON.stringify(errBody.error);
+      }
     } catch {
       /* ignore parse failure, use default message */
     }
