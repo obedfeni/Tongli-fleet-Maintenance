@@ -88,7 +88,10 @@ export async function POST(req: NextRequest) {
       odometerKm: r.odometerKm!,
     }));
 
-    const predictionResult = await runPrediction({ readings: predictInput, asOfDate: new Date().toISOString() });
+   const predictionResult = await runPrediction(
+      { readings: predictInput, asOfDate: new Date().toISOString() },
+      { origin: req.nextUrl.origin, cookie: req.headers.get('cookie') }
+    );
     const predictionByTruck = new Map(predictionResult.predictions.map((p) => [p.truckId, p]));
 
     // Persist readings, flagging outliers the ML engine identified.
