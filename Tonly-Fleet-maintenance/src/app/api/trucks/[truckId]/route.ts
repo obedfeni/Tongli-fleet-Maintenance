@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { clearTruckTarget, getAllTrucksWithLatestRun, updateTruckTarget } from '@/lib/db';
+import { clearTruckTarget, deactivateTruck, getAllTrucksWithLatestRun, updateTruckTarget } from '@/lib/db';
 import { computeFleetRow } from '@/lib/types';
 import { z } from 'zod';
 
@@ -50,5 +50,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ tr
     console.error('Failed to update truck:', err);
     const message = err instanceof Error ? err.message : 'Unknown error.';
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
+ * Soft-delete a truck: marks it inactive rather than removing its row, so
+ * it stops appearing on the dashboard AND (unlike a raw SQL DELETE) stays
+ * gone the next time a log/sheet containing its rows is re-uploaded — see
+ * the comment on deactivateTruck() in src/lib/db.ts.
+ */
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ truckId: string }> }) {
+  const { truckId: rawTruckId } = await params;
+  const truckId = rawTruckId.toUpperCase();
+
+  try {
+    await deactivateTruck(truckId);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to remove truck:', err);
+    const message = err instanceof Error ? err.message : 'Unknown error.';
+    return NextResponse.json({ error: message }, { status: 404 });
   }
 }
