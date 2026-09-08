@@ -1,11 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Trash2 } from 'lucide-react';
 import { StatusBadge } from './StatusBadge';
 import { Input } from './ui/input';
+import { useLanguage } from './LanguageProvider';
 import { cn, formatDate, formatDays, formatKm } from '@/lib/utils';
 import type { FleetRow } from '@/lib/types';
+import type { Translation } from '@/lib/i18n';
 
 type SortKey = 'truckId' | 'currentOdometerKm' | 'avgDailyKm' | 'kmRemaining' | 'predictedDays' | 'status';
 
@@ -25,11 +27,14 @@ export function FleetTable({
   fleet,
   onUpdate,
   onSelectTruck,
+  onDeleteTruck,
 }: {
   fleet: FleetRow[];
   onUpdate: (truckId: string, patch: { pmName?: string | null; pmTargetKm?: number | null }) => Promise<void>;
   onSelectTruck: (truckId: string) => void;
+  onDeleteTruck: (truckId: string) => Promise<void> | void;
 }) {
+  const { t } = useLanguage();
   const [sortKey, setSortKey] = React.useState<SortKey>('status');
   const [sortDir, setSortDir] = React.useState<1 | -1>(1);
 
@@ -69,21 +74,21 @@ export function FleetTable({
       <table className="w-full min-w-[1100px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-border bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <Th label="Truck ID" sortKey="truckId" active={sortKey} dir={sortDir} onClick={toggleSort} />
-            <th className="px-4 py-3 font-medium">Next PM Name</th>
-            <th className="px-4 py-3 font-medium">Next PM Target km</th>
-            <Th label="Current Odometer" sortKey="currentOdometerKm" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-            <Th label="Avg Daily km" sortKey="avgDailyKm" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-            <Th label="km Remaining" sortKey="kmRemaining" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-            <Th label="Predicted Days" sortKey="predictedDays" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
-            <th className="px-4 py-3 font-medium">Predicted PM Date</th>
-            <Th label="Status" sortKey="status" active={sortKey} dir={sortDir} onClick={toggleSort} />
+            <Th label={t.colTruckId} sortKey="truckId" active={sortKey} dir={sortDir} onClick={toggleSort} />
+            <th className="px-4 py-3 font-medium">{t.colPmName}</th>
+            <th className="px-4 py-3 font-medium">{t.colPmTarget}</th>
+            <Th label={t.colCurrentOdometer} sortKey="currentOdometerKm" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+            <Th label={t.colAvgDaily} sortKey="avgDailyKm" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+            <Th label={t.colKmRemaining} sortKey="kmRemaining" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+            <Th label={t.colPredictedDays} sortKey="predictedDays" active={sortKey} dir={sortDir} onClick={toggleSort} align="right" />
+            <th className="px-4 py-3 font-medium">{t.colPredictedDate}</th>
+            <Th label={t.colStatus} sortKey="status" active={sortKey} dir={sortDir} onClick={toggleSort} />
             <th className="px-2 py-3" />
           </tr>
         </thead>
         <tbody>
           {sorted.map((row) => (
-            <FleetRowLine key={row.truckId} row={row} onUpdate={onUpdate} onSelectTruck={onSelectTruck} />
+            <FleetRowLine key={row.truckId} row={row} onUpdate={onUpdate} onSelectTruck={onSelectTruck} onDeleteTruck={onDeleteTruck} t={t} />
           ))}
         </tbody>
       </table>
@@ -124,10 +129,14 @@ function FleetRowLine({
   row,
   onUpdate,
   onSelectTruck,
+  onDeleteTruck,
+  t,
 }: {
   row: FleetRow;
   onUpdate: (truckId: string, patch: { pmName?: string | null; pmTargetKm?: number | null }) => Promise<void>;
   onSelectTruck: (truckId: string) => void;
+  onDeleteTruck: (truckId: string) => Promise<void> | void;
+  t: Translation;
 }) {
   const [pmName, setPmName] = React.useState(row.pmName ?? '');
   const [pmTarget, setPmTarget] = React.useState(row.pmTargetKm != null ? String(row.pmTargetKm) : '');
@@ -172,7 +181,7 @@ function FleetRowLine({
       <td className="px-4 py-2">
         <Input
           value={pmName}
-          placeholder="e.g. PM3"
+          placeholder={t.pmNamePlaceholder}
           onChange={(e) => setPmName(e.target.value)}
           onBlur={saveName}
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
@@ -184,7 +193,7 @@ function FleetRowLine({
           type="number"
           inputMode="decimal"
           value={pmTarget}
-          placeholder="km"
+          placeholder={t.kmPlaceholder}
           onChange={(e) => setPmTarget(e.target.value)}
           onBlur={saveTarget}
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
@@ -200,13 +209,22 @@ function FleetRowLine({
         <StatusBadge status={row.status} />
       </td>
       <td className="px-2 py-2">
-        <button
-          onClick={() => onSelectTruck(row.truckId)}
-          className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-          title="View trend chart"
-        >
-          <ExternalLink className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onSelectTruck(row.truckId)}
+            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            title={t.viewTrendChart}
+          >
+            <ExternalLink className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onDeleteTruck(row.truckId)}
+            className="rounded p-1.5 text-muted-foreground hover:bg-danger/10 hover:text-danger"
+            title={t.removeTruck}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </td>
     </tr>
   );
