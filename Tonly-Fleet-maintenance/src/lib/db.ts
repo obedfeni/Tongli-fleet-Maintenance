@@ -158,6 +158,35 @@ export async function clearTruckTarget(truckId: string): Promise<Truck> {
   return result[0];
 }
 
+/**
+ * Soft-delete: marks a truck inactive instead of removing its row. This is
+ * what makes removal "stick" across future uploads — a hard SQL DELETE has
+ * no memory of the truck ever having existed, so the very next ingest that
+ * still contains that truck's rows just recreates it (via getOrCreateTruck's
+ * upsert) with the schema default active = true. Deactivating instead keeps
+ * the row (and its history) around but flagged, and getOrCreateTruck's
+ * select-first lookup returns that same inactive row on future uploads
+ * instead of inserting a fresh active one — the ingest route then skips it.
+ */
+export async function deactivateTruck(truckId: string): Promise<Truck> {
+  const result = (await sql`
+    update trucks set active = false where truck_id = ${truckId}
+    returning *
+  `) as Truck[];
+  if (!result[0]) throw new Error(`Truck ${truckId} not found`);
+  return result[0];
+}
+
+/** Undoes deactivateTruck — brings a removed truck back into the active fleet. */
+export async function reactivateTruck(truckId: string): Promise<Truck> {
+  const result = (await sql`
+    update trucks set active = true where truck_id = ${truckId}
+    returning *
+  `) as Truck[];
+  if (!result[0]) throw new Error(`Truck ${truckId} not found`);
+  return result[0];
+}
+
 export async function getAllTrucksWithLatestRun(): Promise<TruckWithLatestRun[]> {
   const result = (await sql`
     select
