@@ -51,12 +51,14 @@ export interface Translation {
   pmNamePlaceholder: string;
   kmPlaceholder: string;
   viewTrendChart: string;
+  removeTruck: string;
+  confirmRemoveTruck: (truckId: string) => string;
+  truckRemoved: (truckId: string) => string;
+  failedToRemove: string;
 
-  bucketOverdue: string;
-  bucketDueMedium: string;
-  bucketDueLater: string;
-  bucketHealthy: string;
-  bucketNeedsAttention: string;
+  toggleMenu: string;
+  monthBrowserTitle: string;
+  noTrucksDueThisMonth: string;
   ofTrucks: (n: number) => string;
 
   statusEnterTarget: string;
@@ -122,12 +124,15 @@ export const translations: Record<Lang, Translation> = {
     pmNamePlaceholder: 'e.g. PM3',
     kmPlaceholder: 'km',
     viewTrendChart: 'View trend chart',
+    removeTruck: 'Remove truck',
+    confirmRemoveTruck: (truckId) =>
+      `Remove ${truckId} from the fleet? It will stay hidden even if a future upload still contains its rows — you can bring it back later from the database if needed.`,
+    truckRemoved: (truckId) => `${truckId} removed.`,
+    failedToRemove: 'Failed to remove truck.',
 
-    bucketOverdue: 'Overdue / due ≤ 7 days',
-    bucketDueMedium: 'Due 8–14 days',
-    bucketDueLater: 'Due 15–30 days',
-    bucketHealthy: 'Healthy (> 30 days)',
-    bucketNeedsAttention: 'Needs attention',
+    toggleMenu: 'Toggle menu',
+    monthBrowserTitle: 'Trucks due for PM by month',
+    noTrucksDueThisMonth: 'No trucks due for PM in this month.',
     ofTrucks: (n) => `of ${n} trucks`,
 
     statusEnterTarget: 'Enter target km',
@@ -192,12 +197,14 @@ export const translations: Record<Lang, Translation> = {
     pmNamePlaceholder: '例如 PM3',
     kmPlaceholder: '公里',
     viewTrendChart: '查看趋势图',
+    removeTruck: '移除车辆',
+    confirmRemoveTruck: (truckId) => `确定要将 ${truckId} 从车队中移除吗？即使以后上传的记录中仍包含该车辆的数据，它也不会再显示——如需恢复，可以之后从数据库中找回。`,
+    truckRemoved: (truckId) => `已移除 ${truckId}。`,
+    failedToRemove: '移除车辆失败。',
 
-    bucketOverdue: '已逾期 / 7 天内到期',
-    bucketDueMedium: '8–14 天内到期',
-    bucketDueLater: '15–30 天内到期',
-    bucketHealthy: '状态良好（超过 30 天）',
-    bucketNeedsAttention: '需要关注',
+    toggleMenu: '切换菜单',
+    monthBrowserTitle: '按月查看待保养车辆',
+    noTrucksDueThisMonth: '本月没有需要保养的车辆。',
     ofTrucks: (n) => `共 ${n} 辆车`,
 
     statusEnterTarget: '请输入目标里程',
