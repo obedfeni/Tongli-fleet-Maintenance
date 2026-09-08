@@ -71,24 +71,42 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Upsert every truck seen, and build the DB-id lookup.
+    // Upsert every truck seen, and build the DB-id lookup. getOrCreateTruck
+    // looks the truck up by truck_id first, so a truck that was previously
+    // soft-deleted (active = false, via the dashboard's Remove button or an
+    // UPDATE ... SET active = false) is returned as-is here — it is NOT
+    // reactivated just because the uploaded log still contains its rows.
     const uniqueTruckIds = Array.from(new Set(parsed.readings.map((r) => r.truckId!)));
     const truckByCanonicalId = new Map<string, Awaited<ReturnType<typeof getOrCreateTruck>>>();
     for (const tid of uniqueTruckIds) {
       truckByCanonicalId.set(tid, await getOrCreateTruck(tid));
     }
 
-    const batch = await createIngestBatch(sourceType, sourceName, parsed.readings.length);
+    // Removed trucks stay removed: skip them entirely for this ingest so a
+    // re-uploaded file/sheet that still has their rows can't resurrect them.
+    const removedTruckIds = uniqueTruckIds.filter((tid) => !truckByCanonicalId.get(tid)!.active);
+    const activeTruckIds = uniqueTruckIds.filter((tid) => truckByCanonicalId.get(tid)!.active);
+    const removedSet = new Set(removedTruckIds);
+    const activeReadings = parsed.readings.filter((r) => !removedSet.has(r.truckId!));
 
-    // Run the ML prediction engine.
-    const predictInput: PredictReadingInput[] = parsed.readings.map((r) => ({
+    if (removedTruckIds.length > 0) {
+      parsed.warnings.push(
+        `Skipped ${removedTruckIds.length} removed truck(s) still present in this log: ${removedTruckIds.join(', ')}. ` +
+          `Reactivate one from the database (UPDATE trucks SET active = true WHERE truck_id = '...') if this was unintended.`
+      );
+    }
+
+    const batch = await createIngestBatch(sourceType, sourceName, activeReadings.length);
+
+    // Run the ML prediction engine — only on trucks that are still active.
+    const predictInput: PredictReadingInput[] = activeReadings.map((r) => ({
       truckId: r.truckId!,
       rowRef: r.rowRef,
       date: r.date ? r.date.toISOString() : null,
       odometerKm: r.odometerKm!,
     }));
 
-   const predictionResult = await runPrediction(
+    const predictionResult = await runPrediction(
       { readings: predictInput, asOfDate: new Date().toISOString() },
       { origin: req.nextUrl.origin, cookie: req.headers.get('cookie') }
     );
@@ -102,7 +120,7 @@ export async function POST(req: NextRequest) {
 
     await insertReadings(
       batch.id,
-      parsed.readings.map((r) => ({
+      activeReadings.map((r) => ({
         truckDbId: truckByCanonicalId.get(r.truckId!)!.id,
         sourceRowRef: r.rowRef,
         rawTruckLabel: r.rawTruckLabel,
@@ -116,7 +134,7 @@ export async function POST(req: NextRequest) {
     // truck's currently-saved PM target.
     const fleetRows: FleetRow[] = [];
     const runInserts = [];
-    for (const tid of uniqueTruckIds) {
+    for (const tid of activeTruckIds) {
       const truck = truckByCanonicalId.get(tid)!;
       const pred = predictionByTruck.get(tid);
       if (!pred) continue;
